@@ -1,5 +1,12 @@
 {
     "items": [
+        { "url" : "http://streamtest.eu/dash/vod/testpic_2s/cea_and_segs.mpd", "name" : "Testpic 2CC + segs", "browsers": "cdsbi" },
+        { "url" : "http://streamtest.eu/dash/vod/espn/3G_PHONE.mpd", "name" : "ESPN CEA-608 signalled (no TTML)", "browsers" : "cdsbi"},
+        { "url" : "http://streamtest.eu/dash/vod/espn/3G_PHONE_orig.mpd", "name" : "ESPN CEA-608 not signalled (with TTML)", "browsers" : "cdsbi"},
+        { "url" : "http://streamtest.eu/dash/vod/espn/3G_PHONE_both.mpd", "name" : "ESPN CEA-608 signalled(with TTML)", "browsers" : "cdsbi"},
+        { "url" : "http://vm2.dashif.org/dash/vod/testpic_2s/multi_subs.mpd", "name" : "Testpic 2s with multisubs as segments", "browsers" : "cdsbi"},
+        { "url" : "http://vm2.dashif.org/dash/vod/testpic_2s/xml_subs.mpd", "name" : "Testpic 2s with multisubs as TTML files", "browsers" : "cdsbi"},
+        { "url" : "http://streamtest.eu/dash/vod/testpic_2s/Manifest.mpd","name" : "Testpic VoD", "browsers": "cdsbi" },
         { "url" : "http://dash.edgesuite.net/dash264/TestCases/1a/netflix/exMPD_BIP_TC1.mpd","name" : "Single Resolution Multi-Rate 1", "browsers": "cdsbi" },
         { "url" : "http://dash.edgesuite.net/dash264/TestCases/1a/sony/SNE_DASH_SD_CASE1A_REVISED.mpd","name" : "Single Resolution Multi-Rate 2", "browsers": "cdsbi" },
         { "url" : "http://dash.edgesuite.net/dash264/TestCases/1a/qualcomm/1/MultiRate.mpd","name" : "Single Resolution Multi-Rate 3", "browsers": "cdsbi" },

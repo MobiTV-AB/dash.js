@@ -69,7 +69,7 @@ MediaPlayer.dependencies.Stream = function () {
                 return false;
             }
 
-            if ((type === "text") || (type === "fragmentedText")) return true;
+            if ((type === "text") || (type === "fragmentedText") || (type === "embeddedText")) return true;
 
             codec = mediaInfo.codec;
             self.log(type + " codec: " + codec);
@@ -155,11 +155,15 @@ MediaPlayer.dependencies.Stream = function () {
 
             for (var i = 0, ln = allMediaForType.length; i < ln; i += 1) {
                 mediaInfo = allMediaForType[i];
-
-                if (!isMediaSupported.call(self, mediaInfo, mediaSource, manifest)) continue;
-
-                if (self.mediaController.isMultiTrackSupportedByType(mediaInfo.type)) {
-                    self.mediaController.addTrack(mediaInfo, streamInfo);
+                
+                if (type === "embeddedText") {
+                    this.textSourceBuffer.addEmbeddedTrack(mediaInfo);
+                } else {
+                    if (!isMediaSupported.call(self, mediaInfo, mediaSource, manifest)) continue;
+                    
+                    if (self.mediaController.isMultiTrackSupportedByType(mediaInfo.type)) {
+                        self.mediaController.addTrack(mediaInfo, streamInfo);
+                    }
                 }
             }
 
@@ -188,6 +192,7 @@ MediaPlayer.dependencies.Stream = function () {
             initializeMediaForType.call(self, "audio", mediaSource);
             initializeMediaForType.call(self, "text", mediaSource);
             initializeMediaForType.call(self, "fragmentedText", mediaSource);
+            initializeMediaForType.call(self, "embeddedText", mediaSource);
             initializeMediaForType.call(self, "muxed", mediaSource);
 
             createBuffers.call(self);
@@ -339,6 +344,7 @@ MediaPlayer.dependencies.Stream = function () {
         eventBus: undefined,
         manifestModel: undefined,
         sourceBufferExt: undefined,
+        textSourceBuffer: undefined,
         adapter: undefined,
         videoModel: undefined,
         fragmentController: undefined,

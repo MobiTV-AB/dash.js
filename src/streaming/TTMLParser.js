@@ -40,6 +40,7 @@ MediaPlayer.utils.TTMLParser = function() {
         ttml, // contains the whole ttml document received
         ttmlStyling, // contains the styling information from the document
         ttmlLayout, // contains the positioning information from the document
+        ttmlCEA608Information, // contains the CEA608 information metadata
         fontSize = {},
         lineHeight = {},
         linePadding = {},
@@ -215,6 +216,7 @@ MediaPlayer.utils.TTMLParser = function() {
         convertHexToRGBA = function(rgba) {
             // Get the hexadecimal value without the #.
             var hex = rgba.slice(1);
+
             // Separate the values in pairs.
             var hexMatrice = hex.match(/.{2}/g);
             // Convert the alpha value in decimal between 0 and 1.
@@ -673,7 +675,7 @@ MediaPlayer.utils.TTMLParser = function() {
                     // Extract the style of the span.
                     if (el.span.hasOwnProperty('style')) {
                         var spanStyle = getProcessedStyle(el.span.style, cellUnit);
-                        spanHTMLElement.className = "spanPadding " + el.span.style;
+                        spanHTMLElement.className = "spanPadding " + el.span.style + " customSpanColor";
                         spanHTMLElement.style.cssText = spanStyle.join(" ");
                     }
 
@@ -734,6 +736,7 @@ MediaPlayer.utils.TTMLParser = function() {
                 else if (el.hasOwnProperty('#text')) {
                     // Add the text to an individual span element (to add line padding if it is defined).
                     var textNode = document.createElement('span');
+                    textNode.className = "customSpanColor";
                     textNode.textContent = el['#text'];
 
                     // We append the element to the cue container.
@@ -748,17 +751,19 @@ MediaPlayer.utils.TTMLParser = function() {
             // Obtain the region ID(s) assigned to the cue.
             var pRegionID = cue.region;
             // If div has a region.
-            var divRegionID = div.region;
+            var divRegionID = div.region || ttml.tt.body.region;
 
             var divRegion;
             var pRegion;
 
             // If the div element reference a region.
             if (divRegionID) {
+                cue.divRegionID = divRegionID;
                 divRegion = getProcessedRegion(divRegionID, cellUnit);
             }
             // If the p element reference a region.
             if (pRegionID) {
+                cue.pRegionID = pRegionID;
                 pRegion = cueRegionProperties.concat(getProcessedRegion(pRegionID, cellUnit));
                 if (divRegion) {
                     cueRegionProperties = mergeArrays(divRegion, pRegion);
@@ -777,8 +782,20 @@ MediaPlayer.utils.TTMLParser = function() {
 
         constructCueStyle = function(cue, cellUnit) {
             var cueStyleProperties = []; // properties to be put in the "paragraph" HTML element
+            var cueRegion;
             // Obtain the style ID(s) assigned to the cue.
+
             var pStyleID = cue.style;
+
+            if (pStyleID === undefined && cue.divRegionID) {
+                cueRegion = findRegionFromID(ttmlLayout, cue.divRegionID);
+                pStyleID = cueRegion.style;
+            }
+            if (pStyleID === undefined && cue.pRegionID) {
+                cueRegion = findRegionFromID(ttmlLayout, cue.pRegionID);
+                pStyleID = cueRegion.style;
+            }
+
             // If body has a style.
             var bodyStyleID = ttml.tt.body.style;
             // If div has a style.
@@ -878,6 +895,11 @@ MediaPlayer.utils.TTMLParser = function() {
             // Extract styling and layout from the document.
             ttmlLayout = ttml.tt.head.layout.region_asArray;
             ttmlStyling = ttml.tt.head.styling.style_asArray;
+            if (ttml.tt.head.metadata && ttml.tt.head.metadata.information) {
+                ttmlCEA608Information = ttml.tt.head.metadata.information;
+            } else {
+                ttmlCEA608Information = null;
+            }
 
             // Check if the document is conform to the specification.
             if (!passStructuralConstraints()) {
@@ -891,6 +913,7 @@ MediaPlayer.utils.TTMLParser = function() {
             // Recover the video width and height displayed by the player.
             var videoWidth = self.videoModel.getElement().clientWidth;
             var videoHeight = self.videoModel.getElement().clientHeight;
+            var isFromCEA608 = ttmlCEA608Information ? ttmlCEA608Information.hasOwnProperty('m608:channel') : false;
 
             // Compute the CellResolution unit in order to process properties using sizing (fontSize, linePadding, etc).
             var cellUnit = [videoWidth / cellResolution[0], videoHeight / cellResolution[1]];
@@ -1075,6 +1098,7 @@ MediaPlayer.utils.TTMLParser = function() {
                             cueID         : cueID,
                             videoHeight   : videoHeight,
                             videoWidth    : videoWidth,
+                            isFromCEA608  : isFromCEA608,
                             cellResolution: cellResolution,
                             fontSize      : fontSize || {
                                 defaultFontSize: '100'

@@ -34,6 +34,9 @@ MediaPlayer.models.VideoModel = function () {
     var element,
         TTMLRenderingDiv,
         videoContainer,
+        customForegroundColor,
+        customBackgroundColor,
+        customFontMultiplier = 1.0,
         stalledStreams = [],
         //_currentTime = 0,
 
@@ -175,6 +178,23 @@ MediaPlayer.models.VideoModel = function () {
             TTMLRenderingDiv.style.pointerEvents = 'none';
             TTMLRenderingDiv.style.top = 0;
             TTMLRenderingDiv.style.left = 0;
+        },
+
+        getCustomColors: function() {
+            return { 'foregroundColor':customForegroundColor, 'backgroundColor':customBackgroundColor };
+        },
+
+        setCustomColors: function(foregroundColor, backgroundColor) {
+            customForegroundColor = foregroundColor;
+            customBackgroundColor = backgroundColor;
+        },
+
+        getCustomFontMultiplier: function() {
+            return customFontMultiplier;
+        },
+
+        setCustomFontMultiplier: function(fontMultiplier) {
+            customFontMultiplier = fontMultiplier;
         },
 
         setSource: function (source) {

@@ -1151,6 +1151,20 @@ MediaPlayer = function (context) {
             resetAndPlay.call(this);
         },
 
+        setCustomColors: function(foregroundColor, backgroundColor) {
+            if (!videoModel) {
+                throw "Must call attachView with video element before you can set custom colors";
+            }
+            videoModel.setCustomColors(foregroundColor, backgroundColor);
+        },
+
+        setCustomFontMultiplier: function(fontMultiplier) {
+            if (!videoModel) {
+                throw "Must call attachView with video element before you can set custom colors";
+            }
+            videoModel.setCustomFontMultiplier(fontMultiplier);
+        },
+
         /**
          * Use this method to attach an HTML5 div for dash.js to render rich TTML subtitles.
          *

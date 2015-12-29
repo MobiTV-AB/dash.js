@@ -144,9 +144,9 @@ var BASE64 = {};
     };
 })("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
 
-if (undefined === btoa) {
+/*if (undefined === btoa) {
     var btoa = BASE64.encode;
 }
 if (undefined === atob) {
     var atob = BASE64.decode;
-}
+}*/

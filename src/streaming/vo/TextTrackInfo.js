@@ -37,6 +37,7 @@ MediaPlayer.vo.TextTrackInfo = function () {
     this.defaultTrack = false;
     this.kind = null;
     this.isFragmented = false;
+    this.isEmbedded = false;
 };
 
 MediaPlayer.vo.TextTrackInfo.prototype = {

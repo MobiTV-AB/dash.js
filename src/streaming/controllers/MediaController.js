@@ -169,6 +169,11 @@ MediaPlayer.dependencies.MediaController = function () {
                      list : [],
                      storeLastSettings: true,
                      current: null
+                 },
+                 embeddedText: {
+                     list : [],
+                     storeLastSettings: true,
+                     current: null
                  }
              };
          };
@@ -194,7 +199,7 @@ MediaPlayer.dependencies.MediaController = function () {
         checkInitialMediaSettings: function(streamInfo) {
             var self = this;
 
-            ["audio", "video", "text", "fragmentedText"].forEach(function(type){
+            ["audio", "video", "text", "fragmentedText", "embeddedText"].forEach(function(type){
                 var settings = self.getInitialSettings(type),
                     tracksForType = self.getTracksFor(type, streamInfo),
                     isSet = false;
@@ -401,7 +406,7 @@ MediaPlayer.dependencies.MediaController = function () {
          * @memberof MediaController#
          */
         isMultiTrackSupportedByType: function (type) {
-            return (type === "audio" || type === "video" || type === "text" || type === "fragmentedText");
+            return (type === "audio" || type === "video" || type === "text" || type === "fragmentedText" || type === "embeddedText");
         },
 
         /**

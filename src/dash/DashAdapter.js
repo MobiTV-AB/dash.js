@@ -87,7 +87,16 @@ Dash.dependencies.DashAdapter = function () {
             viewpoint = this.manifestExt.getViewpointForAdaptation(a);
             mediaInfo.viewpoint = viewpoint ? viewpoint.value : undefined;
             mediaInfo.accessibility = this.manifestExt.getAccessibilityForAdaptation(a).map(function(accessibility){
-                return accessibility.value;
+                var acc_data = accessibility.value;
+                if (accessibility.schemeIdUri && (accessibility.schemeIdUri.search("cea-608") >= 0)) {
+                    if (accessibility.value) {
+                        acc_data = "cea-608:" + accessibility.value;
+                    } else {
+                        acc_data = "cea-608";
+                    }
+                    mediaInfo.embeddedCaptions = true;
+                }
+                return acc_data;
             });
             mediaInfo.audioChannelConfiguration =  this.manifestExt.getAudioChannelConfigurationForAdaptation(a).map(function(audioChannelConfiguration){
                 return audioChannelConfiguration.value;
@@ -109,6 +118,17 @@ Dash.dependencies.DashAdapter = function () {
             mediaInfo.isText = this.manifestExt.getIsTextTrack(mediaInfo.mimeType);
 
             return mediaInfo;
+        },
+        
+        convertVideoInfoToEmbeddedTextInfo = function(mediaInfo, channel, lang) {
+            mediaInfo.id = channel; // CC1, CC2, CC3, or CC4
+            mediaInfo.index = 100 + parseInt(channel.substring(2,3));
+            mediaInfo.type = "embeddedText";
+            mediaInfo.codec = "cea-608-in-SEI";
+            mediaInfo.isText = true;
+            mediaInfo.isEmbedded = true;
+            mediaInfo.lang = channel + " " + lang;
+            mediaInfo.roles = ['caption'];
         },
 
         convertPeriodToStreamInfo = function(manifest, period) {
@@ -157,26 +177,63 @@ Dash.dependencies.DashAdapter = function () {
         getAllMediaInfoForType = function(manifest, streamInfo, type) {
             var periodInfo = getPeriodForStreamInfo(streamInfo),
                 periodId = periodInfo.id,
-                adaptationsForType = this.manifestExt.getAdaptationsForType(manifest, streamInfo.index, type),
+                adaptationsForType = this.manifestExt.getAdaptationsForType(manifest, streamInfo.index, type !== "embeddedText" ? type : "video"),
                 data,
                 mediaArr = [],
                 media,
-                idx;
+                idx,
+                i,
+                j,
+                ln;
 
             if (!adaptationsForType) return mediaArr;
 
             adaptations[periodId] = adaptations[periodId] || this.manifestExt.getAdaptationsForPeriod(manifest, periodInfo);
 
-            for (var i = 0, ln = adaptationsForType.length; i < ln; i += 1) {
+            for (i = 0, ln = adaptationsForType.length; i < ln; i += 1) {
                 data = adaptationsForType[i];
                 idx = this.manifestExt.getIndexForAdaptation(data, manifest, streamInfo.index);
                 media = convertAdaptationToMediaInfo.call(this, manifest, adaptations[periodId][idx]);
-
-                if (media) {
+                if (type === "embeddedText") {
+                    var accessibilityLength = media.accessibility.length;
+                    for (j = 0 ; j < accessibilityLength ; j++) {
+                        if (!media) {
+                            continue;
+                        }
+                        var accessibility = media.accessibility[j];
+                        if (accessibility.indexOf("cea-608:") === 0) {
+                            var value = accessibility.substring(8);
+                            var parts = value.split(";");
+                            if (parts[0].substring(0, 2) === "CC") {
+                                for (j = 0 ; j < parts.length ; j++ ) {
+                                    if (!media) {
+                                        media = convertAdaptationToMediaInfo.call(this, manifest, adaptations[periodId][idx]);
+                                    }
+                                    convertVideoInfoToEmbeddedTextInfo(media, parts[j].substring(0,3), parts[j].substring(4));
+                                    mediaArr.push(media);
+                                    media = null;
+                                }
+                            } else {
+                                for (j = 0 ; j < parts.length ; j++ ) { // Only languages for CC1, CC2, ...
+                                    if (!media) {
+                                        media = convertAdaptationToMediaInfo.call(this, manifest, adaptations[periodId][idx]);
+                                    }
+                                    convertVideoInfoToEmbeddedTextInfo(media, "CC" + (j+1), parts[j]);
+                                    mediaArr.push(media);
+                                    media = null;
+                                }
+                            }
+                        } else if (accessibility.indexOf("cea-608") === 0) { // Nothing known. We interpret it as CC1=eng                        
+                            convertVideoInfoToEmbeddedTextInfo(media, "CC1", "eng");
+                            mediaArr.push(media);
+                            media = null;
+                        }
+                    }
+                }
+                if (media && type !== "embeddedText") {
                     mediaArr.push(media);
                 }
             }
-
             return mediaArr;
         },
 
@@ -362,3 +419,4 @@ Dash.dependencies.DashAdapter = function () {
 Dash.dependencies.DashAdapter.prototype = {
     constructor: Dash.dependencies.DashAdapter
 };
+

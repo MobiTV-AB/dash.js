@@ -573,6 +573,8 @@
                 mediaController.unsubscribe(MediaPlayer.dependencies.MediaController.eventList.CURRENT_TRACK_CHANGED, stream);
                 stream.reset(hasMediaError);
             }
+            var textSourceBuffer = this.system.getObject("textSourceBuffer");
+            textSourceBuffer.resetEmbeddedCc();
 
             streams = [];
             this.unsubscribe(MediaPlayer.dependencies.StreamController.eventList.ENAME_STREAMS_COMPOSED, this.manifestUpdater);

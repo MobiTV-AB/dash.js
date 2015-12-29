@@ -61,6 +61,10 @@ MediaPlayer.utils.IsoFile = function () {
             event_duration: "event_duration",
             message_data: "message_data"
         },
+        
+        mfhdProps = {
+            sequence_number: "sequence_number"
+        },
 
         mdhdProps = {
             timescale: "timescale"
@@ -125,6 +129,9 @@ MediaPlayer.utils.IsoFile = function () {
                     break;
                 case "emsg":
                     copyProps(boxData, box, emsgProps);
+                    break;
+                case "mfhd":
+                    copyProps(boxData, box, mfhdProps);
                     break;
                 case "mdhd":
                     copyProps(boxData, box, mdhdProps);

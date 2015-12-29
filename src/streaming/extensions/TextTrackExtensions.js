@@ -106,7 +106,7 @@ MediaPlayer.utils.TextTrackExtensions = function () {
                     return a.index - b.index;
                 });
                 captionContainer = this.videoModel.getTTMLRenderingDiv();
-                var defaultIndex = 0;
+                var defaultIndex = -1;
                 for(var i = 0 ; i < textTrackQueue.length; i++) {
                     var track = createTrackForUserAgent(i);
                     currentTrackIdx = i;//set to i for external track setup. rest to default value at end of loop
@@ -123,20 +123,25 @@ MediaPlayer.utils.TextTrackExtensions = function () {
                         video.appendChild(track);
                     }
                     var textTrack = video.textTracks[i];
-                    if (captionContainer && textTrackQueue[i].isTTML) {
+                    textTrack.non_added_cues = [];
+                    if (captionContainer && (textTrackQueue[i].isTTML || textTrackQueue[i].isCEA608)) {
                         textTrack.renderingType = "html";
                     } else {
                         textTrack.renderingType = "default";
                     }
-                    this.addCaptions(0, textTrackQueue[i].captionData);
+                    this.addCaptions(i, 0, textTrackQueue[i].captionData);
                     this.eventBus.dispatchEvent({type:MediaPlayer.events.TEXT_TRACK_ADDED});
                 }
                 this.setCurrentTrackIdx(defaultIndex);
+                if (defaultIndex >= 0) {
+                    video.textTracks[defaultIndex].mode = "showing";
+                    this.addCaptions(defaultIndex, 0, null);
+                }
                 this.eventBus.dispatchEvent({type:MediaPlayer.events.TEXT_TRACKS_ADDED, data:{index:currentTrackIdx, tracks:textTrackQueue}});//send default idx.
             }
         },
 
-        getVideoVisibleVideoSize: function(viewWidth, viewHeight, videoWidth, videoHeight) {
+        getVideoVisibleVideoSize: function(viewWidth, viewHeight, videoWidth, videoHeight, aspectRatio, use80Percent) {
             var viewAspectRatio = viewWidth / viewHeight;
             var videoAspectRatio = videoWidth / videoHeight;
 
@@ -157,19 +162,60 @@ MediaPlayer.utils.TextTrackExtensions = function () {
                 videoPictureY = (viewHeight - videoPictureHeight) / 2;
             }
 
-            return { x:videoPictureX,
-                     y:videoPictureY,
-                     w:videoPictureWidth,
-                     h:videoPictureHeight }; /* Maximal picture size in videos aspect ratio */
+            var videoPictureXAspect = 0;
+            var videoPictureYAspect = 0;
+            var videoPictureWidthAspect = 0;
+            var videoPictureHeightAspect = 0;
+            var videoPictureAspect = videoPictureWidth / videoPictureHeight;
+
+            if (videoPictureAspect > aspectRatio) {
+                videoPictureHeightAspect = videoPictureHeight;
+                videoPictureWidthAspect = videoPictureHeight / (1 / aspectRatio);
+                videoPictureXAspect = (viewWidth - videoPictureWidthAspect) / 2;
+                videoPictureYAspect = 0;
+            } else {
+                videoPictureWidthAspect = videoPictureWidth;
+                videoPictureHeightAspect = videoPictureWidth / aspectRatio;
+                videoPictureXAspect = 0;
+                videoPictureYAspect = (viewHeight - videoPictureHeightAspect) / 2;
+            }
+
+            if (use80Percent) {
+                return { x:videoPictureXAspect + (videoPictureWidthAspect * 0.1),
+                         y:videoPictureYAspect + (videoPictureHeightAspect * 0.1),
+                         w:videoPictureWidthAspect * 0.8,
+                         h:videoPictureHeightAspect* 0.8 }; /* Maximal picture size in videos aspect ratio */
+            } else {
+                return { x:videoPictureXAspect,
+                         y:videoPictureYAspect,
+                         w:videoPictureWidthAspect,
+                         h:videoPictureHeightAspect }; /* Maximal picture size in videos aspect ratio */
+            }
         },
 
         checkVideoSize: function() {
             var track = this.getCurrentTextTrack();
             if (track && track.renderingType === "html") {
+                
+                if (!track.activeCues || track.activeCues.length === 0) {
+                    return;
+                }
                 var newVideoWidth = video.clientWidth;
                 var newVideoHeight = video.clientHeight;
 
-                var realVideoSize = this.getVideoVisibleVideoSize(video.clientWidth, video.clientHeight, video.videoWidth, video.videoHeight);
+                // Create aspect ratio from cellResolutions
+                var aspectRatio = 1;
+                if (track.cellResolution) {
+                    aspectRatio = track.cellResolution[0] / track.cellResolution[1];
+                }
+                var use80Percent = false;
+                if (track.isFromCEA608) {
+                    // If this is CEA608 then use predefined aspect ratio
+                    aspectRatio = 3.5 / 3.0;
+                    use80Percent = true;
+                }
+
+                var realVideoSize = this.getVideoVisibleVideoSize(video.clientWidth, video.clientHeight, video.videoWidth, video.videoHeight, aspectRatio, use80Percent);
 
                 newVideoWidth = realVideoSize.w;
                 newVideoHeight = realVideoSize.h;
@@ -187,7 +233,7 @@ MediaPlayer.utils.TextTrackExtensions = function () {
                     // Video view has changed size, so resize all active cues
                     for (var i = 0; i < track.activeCues.length; ++i) {
                         var cue = track.activeCues[i];
-                            cue.scaleCue(cue);
+                            cue.scaleCue(cue, this);
                     }
 
                     if ((fullscreenAttribute && document[fullscreenAttribute]) || displayCCOnTop) {
@@ -199,7 +245,7 @@ MediaPlayer.utils.TextTrackExtensions = function () {
             }
         },
 
-        scaleCue: function(activeCue) {
+        scaleCue: function(activeCue, t) {
             var videoWidth = actualVideoWidth;
             var videoHeight = actualVideoHeight;
             var key,
@@ -207,6 +253,10 @@ MediaPlayer.utils.TextTrackExtensions = function () {
                 elements;
 
             var cellUnit = [videoWidth / activeCue.cellResolution[0], videoHeight / activeCue.cellResolution[1]];
+            var fontMultiplier = 1.0;
+            if (t.videoModel) {
+                fontMultiplier = t.videoModel.getCustomFontMultiplier();
+            }
 
             if (activeCue.linePadding) {
                 for (key in activeCue.linePadding) {
@@ -226,7 +276,7 @@ MediaPlayer.utils.TextTrackExtensions = function () {
             if(activeCue.fontSize) {
                 for (key in activeCue.fontSize) {
                     if (activeCue.fontSize.hasOwnProperty(key)) {
-                        var valueFontSize = activeCue.fontSize[key] / 100;
+                        var valueFontSize = (activeCue.fontSize[key] / 100) * fontMultiplier;
                         replaceValue  = (valueFontSize * cellUnit[1]).toString();
 
                         if (key !== 'defaultFontSize') {
@@ -256,15 +306,34 @@ MediaPlayer.utils.TextTrackExtensions = function () {
             }
         },
 
-        addCaptions: function(timeOffset, captionData) {
-            var track = this.getCurrentTextTrack();
+        /**
+         * Add captions to track, store for later adding, or add captions added before
+         */
+        addCaptions: function(trackIdx, timeOffset, captionData) {
+            var track = trackIdx >= 0 ?  video.textTracks[trackIdx] : null;
             if(!track) return;
-
-            track.mode = "showing";//make sure tracks are showing to be able to add the cue...
+            if (track.mode !== "showing") {
+                if (captionData && captionData.length > 0) {
+                    track.non_added_cues = track.non_added_cues.concat(captionData);
+                }
+                return;
+            }
+            
+            if (!captionData) {
+                captionData = track.non_added_cues;
+                track.non_added_cues = [];
+            }
+            
+            if (!captionData || captionData.length === 0) {
+                return;
+            }
 
             for(var item in captionData) {
                 var cue,
                     currentItem = captionData[item];
+
+                track.cellResolution = currentItem.cellResolution;
+                track.isFromCEA608 = currentItem.isFromCEA608;
 
                 if (!videoSizeCheckInterval && currentItem.type=="html") {
                     videoSizeCheckInterval = setInterval(this.checkVideoSize.bind(this), 500);
@@ -324,12 +393,14 @@ MediaPlayer.utils.TextTrackExtensions = function () {
                     captionContainer.style.width = actualVideoWidth + "px";
                     captionContainer.style.height = actualVideoHeight + "px";
 
-                    cue.onenter =  function () {
-                        if (track.mode == "showing") {
-                            captionContainer.appendChild(this.cueHTMLElement);
-                            this.scaleCue(this);
-                        }
-                    };
+                    (function(t) {
+                        cue.onenter =  function () {
+                            if (track.mode == "showing") {
+                                captionContainer.appendChild(this.cueHTMLElement);
+                                this.scaleCue(this, t);
+                            }
+                        };
+                    })(this);
 
                     cue.onexit =  function () {
                         var divs = captionContainer.childNodes;
@@ -360,10 +431,6 @@ MediaPlayer.utils.TextTrackExtensions = function () {
 
                 track.addCue(cue);
             }
-
-            if (!textTrackQueue[currentTrackIdx].isFragmented){
-                track.mode = textTrackQueue[currentTrackIdx].defaultTrack ? "showing" : "hidden";
-            }
         },
 
         getCurrentTextTrack: function(){
@@ -373,19 +440,40 @@ MediaPlayer.utils.TextTrackExtensions = function () {
         getCurrentTrackIdx: function(){
             return currentTrackIdx;
         },
+        
+        getTrackIdxForId: function(trackId) {
+            var idx = -1;
+            for (var i = 0; i < video.textTracks.length ; i++) {
+                if (video.textTracks[i].label === trackId) {
+                    idx = i;
+                    break;
+                }
+            }
+            return idx;
+        },
 
         setCurrentTrackIdx : function(idx){
             currentTrackIdx = idx;
+            var customColors = this.videoModel.getCustomColors();
             this.clearCues();
             if (idx >= 0) {
                 var track = video.textTracks[idx];
                 if (track.renderingType === "html") {
                     this.setNativeCueStyle();
+                    this.checkVideoSize.call(this);
+                    if (customColors.foregroundColor && customColors.backgroundColor) {
+                        this.setCustomSpanStyle(customColors.foregroundColor, customColors.backgroundColor);
+                    }
                 } else {
-                    this.removeNativeCueStyle();
+                    if (customColors.foregroundColor && customColors.backgroundColor) {
+                        this.setNativeCueStyle(customColors.foregroundColor, customColors.backgroundColor);
+                    } else {
+                        this.setNativeCueStyle('white', 'black');
+                    }
                 }
             } else {
                 this.removeNativeCueStyle();
+                this.removeCustomSpanStyle();
             }
         },
 
@@ -410,7 +498,9 @@ MediaPlayer.utils.TextTrackExtensions = function () {
             var ln = trackElementArr.length;
             for(var i = 0; i < ln; i++){
                 if (isIE11orEdge) {
-                    this.deleteTrackCues(this.getTextTrack(i));
+                    var track = this.getTextTrack(i);
+                    track.non_added_cues = [];
+                    this.deleteTrackCues(track);
                 }else {
                     video.removeChild(trackElementArr[i]);
                 }
@@ -431,7 +521,9 @@ MediaPlayer.utils.TextTrackExtensions = function () {
         },
 
         /* Set native cue style to transparent background to avoid it being displayed. */
-        setNativeCueStyle: function() {
+        setNativeCueStyle: function(color, background) {
+            var colorToUse = color || "white";
+            var backgroundToUse = background || "transparent";
             if (!isChrome) return;
             var styleElement = document.getElementById('native-cue-style');
             if (styleElement) return; //Already set
@@ -441,11 +533,11 @@ MediaPlayer.utils.TextTrackExtensions = function () {
             document.head.appendChild(styleElement);
             var stylesheet = styleElement.sheet;
             if(video.id) {
-                stylesheet.insertRule("#" + video.id + '::cue {background: transparent}', 0);
+                stylesheet.insertRule("#" + video.id + '::cue {background: ' + backgroundToUse + '; color:' + colorToUse + ';}', 0);
             } else if(video.classList.length !== 0) {
-                stylesheet.insertRule("." + video.className + '::cue {background: transparent}', 0);
+                stylesheet.insertRule("." + video.className + '::cue {background: ' + backgroundToUse + '; color:' + colorToUse + ';}', 0);
             } else {
-                stylesheet.insertRule('video::cue {background: transparent}', 0);
+                stylesheet.insertRule('video::cue {background: ' + backgroundToUse + '; color:' + colorToUse + ';}', 0);
             }
         },
 
@@ -453,6 +545,31 @@ MediaPlayer.utils.TextTrackExtensions = function () {
         removeNativeCueStyle: function() {
             if (!isChrome) return;
             var styleElement = document.getElementById('native-cue-style');
+            if (styleElement) {
+                document.head.removeChild(styleElement);
+            }
+        },
+
+        setCustomSpanStyle: function(color, background) {
+            var colorToUse = color || "white";
+            var backgroundToUse = background || "transparent";
+            if (!isChrome) return;
+            var styleElement = document.getElementById('custom-span-style');
+            if (styleElement){
+                this.removeCustomSpanStyle();
+            } //return; //Already set
+
+            styleElement = document.createElement('style');
+            styleElement.id  = 'custom-span-style';
+            document.head.appendChild(styleElement);
+            var stylesheet = styleElement.sheet;
+            stylesheet.insertRule('.customSpanColor {background: ' + backgroundToUse + ' !important; color:' + colorToUse + ' !important;}', 0);
+        },
+
+        /* Remove the extra cue style with transparent background for native cues. */
+        removeCustomSpanStyle: function() {
+            if (!isChrome) return;
+            var styleElement = document.getElementById('custom-span-style');
             if (styleElement) {
                 document.head.removeChild(styleElement);
             }

@@ -31,6 +31,8 @@
 
     <!-- http://bannister.us/weblog/2007/06/09/simple-base64-encodedecode-javascript/ -->
     <script src="../../src/lib/base64.js"></script>
+    
+    <script src="../../src/lib/cea608-parser.js"></script>
 
     <!-- Misc Libs -->
     <script src="../../src/lib/xml2json.js"></script>
@@ -272,8 +274,8 @@
 
         <div class="row">
             <div class="dash-video-player col-md-9">
-                <div id="videoContainer">
-                    <video controls="true"></video>
+                <div id="videoContainer" style="position:relative;">
+                    <video controls="true" style="display:block;"></video>
                     <div id="video-caption"></div>
                     <div id="videoController" class="video-controller unselectable">
                         <div id="playPauseBtn" class="btn-play-pause" title="Play/Pause">

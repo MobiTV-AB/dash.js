@@ -51,6 +51,7 @@ MediaPlayer.dependencies.BufferController = function () {
         isAppendingInProgress = false,
         isPruningInProgress = false,
         inbandEventFound = false,
+        videoTimescale = null,
 
         createBuffer = function(mediaInfo) {
             if (!mediaInfo || !mediaSource || !this.streamProcessor) return null;
@@ -137,7 +138,7 @@ MediaPlayer.dependencies.BufferController = function () {
                 eventStreamMedia = this.adapter.getEventsFor(manifest, currentRepresentation.mediaInfo, this.streamProcessor),
                 eventStreamTrack = this.adapter.getEventsFor(manifest, currentRepresentation, this.streamProcessor);
 
-            if(eventStreamMedia.length > 0 || eventStreamTrack.length > 0) {
+           if(eventStreamMedia.length > 0 || eventStreamTrack.length > 0) {
                 events = handleInbandEvents.call(this, bytes, request, eventStreamMedia, eventStreamTrack);
                 this.streamProcessor.getEventController().addInbandEvents(events);
             }
@@ -171,8 +172,14 @@ MediaPlayer.dependencies.BufferController = function () {
                 onMediaRejected.call(self, quality, chunk.index, chunk.start);
                 return;
             }
-            //self.log("Push bytes: " + data.byteLength);
+            
             self.sourceBufferExt.append(buffer, chunk);
+            
+            if (chunk.mediaInfo.type === "video") { // This is for embedded captions
+                if (chunk.mediaInfo.embeddedCaptions) {
+                    self.textSourceBuffer.append(chunk.bytes, chunk);
+                }
+            }
         },
 
         onAppended = function(e) {
@@ -630,6 +637,10 @@ MediaPlayer.dependencies.BufferController = function () {
             if (chunk) {
                 if (isAppendingInProgress || !buffer) return;
 
+                if (type === "video") {
+                    var fragmentExt = self.system.getObject("fragmentExt");
+                    videoTimescale = fragmentExt.getMediaTimescaleFromMoov(chunk.bytes);
+                }
                 appendToBuffer.call(self, chunk);
             } else {
                 // if we have not loaded the init fragment for the current quality, do it
@@ -809,6 +820,7 @@ MediaPlayer.dependencies.BufferController = function () {
                 self.sourceBufferExt.abort(mediaSource, buffer);
                 self.sourceBufferExt.removeSourceBuffer(mediaSource, buffer);
             }
+            this.textSourceBuffer.resetEmbeddedCc();
 
             buffer = null;
         }

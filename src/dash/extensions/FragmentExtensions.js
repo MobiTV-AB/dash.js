@@ -38,6 +38,9 @@ Dash.dependencies.FragmentExtensions = function () {
                 tfdtBox = isoFile.getBox("tfdt"),
                 trunBox = isoFile.getBox("trun"),
                 moofBox = isoFile.getBox("moof"),
+                mfhdBox = isoFile.getBox("mfhd"),
+                sequenceNumber,
+                totalDuration = 0,
                 sampleDuration,
                 sampleCompostionTimeOffset,
                 sampleCount,
@@ -48,6 +51,7 @@ Dash.dependencies.FragmentExtensions = function () {
                 i,
                 dataOffset;
 
+            sequenceNumber = mfhdBox.sequence_number;
             sampleCount = trunBox.sample_count;
             sampleDts= tfdtBox.baseMediaDecodeTime;
             dataOffset = (tfhdBox.base_data_offset || 0) + (trunBox.data_offset || 0);
@@ -67,7 +71,8 @@ Dash.dependencies.FragmentExtensions = function () {
                 dataOffset += sampleSize;
                 sampleDts += sampleDuration;
             }
-            return sampleList;
+            totalDuration = sampleDts - tfdtBox.baseMediaDecodeTime;
+            return {sampleList : sampleList, sequenceNumber : sequenceNumber, totalDuration : totalDuration};
         },
 
         getMediaTimescaleFromMoov = function(ab) {
