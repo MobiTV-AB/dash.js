@@ -370,9 +370,8 @@ function ScheduleController(config) {
         log('seek: ' + seekTarget);
         addPlaylistMetrics(PlayList.SEEK_START_REASON);
 
-        metricsModel.updateManifestUpdateInfo(manifestUpdateInfo, {latency: currentRepresentationInfo.DVRWindow.end - playbackController.getTime()});
-
         if (isDynamic) { // need to validate again for dynamic after first seek
+            metricsModel.updateManifestUpdateInfo(manifestUpdateInfo, { latency: currentRepresentationInfo.DVRWindow.end - playbackController.getTime() });
             validate();
         }
     }

@@ -16,8 +16,8 @@ module.exports = function (grunt) {
         },
         concat: {
             all: {
-                src: ['./build/temp/MediaPlayer.js', './build/temp/Protection.js', './externals/*.js'],
-                dest: 'build/temp/Dash.all.js',
+                src: ['./externals/*.js'],
+                dest: 'build/temp/externals.js',
             },
         },
         uglify: {
