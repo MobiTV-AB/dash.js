@@ -139,6 +139,11 @@ function TextSourceBuffer() {
         var mediaInfo = chunk.mediaInfo;
         var mediaType = mediaInfo.type;
         var mimeType = mediaInfo.mimeType;
+        var codecType = mediaInfo.codec || mimeType;
+        if (!codecType) {
+            console.log('No text type defined');
+            return;
+        }
 
         function createTextTrackFromMediaInfo(captionData, mediaInfo) {
             var textTrackInfo = new TextTrackInfo();
@@ -184,19 +189,64 @@ function TextSourceBuffer() {
             } else {
                 samplesInfo = fragmentExt.getSamplesInfo(bytes);
                 sampleList = samplesInfo.sampleList;
-                for (i = 0 ; i < sampleList.length ; i++) {
-                    if (!firstSubtitleStart) {
-                        firstSubtitleStart = sampleList[0].cts - chunk.start * timescale;
+                if (codecType.search('stpp') >= 0) {
+                    parser = parser !== null ? parser : getParser(codecType);
+                    for (i = 0; i < sampleList.length; i++) {
+                        if (!firstSubtitleStart) {
+                            firstSubtitleStart = sampleList[0].cts - chunk.start * timescale;
+                        }
+                        sampleList[i].cts -= firstSubtitleStart;
+                        this.buffered.add(sampleList[i].cts / timescale, (sampleList[i].cts + sampleList[i].duration) / timescale);
+                        ccContent = window.UTF8.decode(new Uint8Array(bytes.slice(sampleList[i].offset, sampleList[i].offset + sampleList[i].size)));
+                        try {
+                            result = parser.parse(ccContent);
+                            textTrackExtensions.addCaptions(currFragmentedTrackIdx, firstSubtitleStart / timescale, result);
+                        } catch (e) {
+                            //empty cue ?
+                        }
                     }
-                    sampleList[i].cts -= firstSubtitleStart;
-                    this.buffered.add(sampleList[i].cts / timescale,(sampleList[i].cts + sampleList[i].duration) / timescale);
-                    ccContent = window.UTF8.decode(new Uint8Array(bytes.slice(sampleList[i].offset, sampleList[i].offset + sampleList[i].size)));
-                    parser = parser !== null ? parser : getParser(mimeType);
-                    try {
-                        result = parser.parse(ccContent);
-                        textTrackExtensions.addCaptions(currFragmentedTrackIdx, firstSubtitleStart / timescale, result);
-                    } catch (e) {
-                        //empty cue ?
+                } else {
+                    // WebVTT case
+                    var captionArray = [];
+                    for (i = 0 ; i < sampleList.length; i++) {
+                        var sample = sampleList[i];
+                        var sampleData = bytes.slice(sample.offset, sample.offset + sample.size);
+                        // There are boxes inside the sampleData, so we need a ISOBoxer to get at it.
+                        var sampleBoxes = ISOBoxer.parseBuffer(sampleData);
+
+                        for (var j = 0 ; j < sampleBoxes.boxes.length; j++) {
+                            var box1 = sampleBoxes.boxes[j];
+                            console.log('VTT box1: ' + box1.type);
+                            if (box1.type === 'vtte') {
+                                continue; //Empty box
+                            }
+                            if (box1.type === 'vttc') {
+                                console.log('VTT vttc boxes.length = ' + box1.boxes.length);
+                                for (var k = 0 ; k < box1.boxes.length; k++) {
+                                    var box2 = box1.boxes[k];
+                                    console.log('VTT box2: ' + box2.type);
+                                    if (box2.type === 'payl') {
+                                        //var raw_data = box2.raw_data;
+                                        //var cue_text = ISOBoxer.Utils.dataViewToString(raw_data, 'utf-8');
+                                        //var cue_text =  new TextDecoder('utf-8').decode(raw_data);
+                                        var cue_text = box2.cue_text;
+                                        console.log('VTT cue_text = ' + cue_text);
+                                        var start_time = sample.cts / timescale;
+                                        var end_time = (sample.cts + sample.duration) / timescale;
+                                        captionArray.push({
+                                            start: start_time,
+                                            end: end_time,
+                                            data: cue_text,
+                                            styles: {}
+                                        });
+                                        console.log('VTT ' + start_time + '-' + end_time + ' : ' + cue_text);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (captionArray.length > 0) {
+                        textTrackExtensions.addCaptions(currFragmentedTrackIdx, 0, captionArray);
                     }
                 }
             }
@@ -204,7 +254,7 @@ function TextSourceBuffer() {
             bytes = new Uint8Array(bytes);
             ccContent = window.UTF8.decode(bytes);
             try {
-                result = getParser(mimeType).parse(ccContent);
+                result = getParser(codecType).parse(ccContent);
                 createTextTrackFromMediaInfo(result, mediaInfo);
             } catch (e) {
                 errHandler.timedTextError(e, 'parse', ccContent);
@@ -293,7 +343,6 @@ function TextSourceBuffer() {
                 }
             }
         }
-        log('Warning: Non-supported text type: ' + mediaType);
     }
     /**
      * Extract CEA-608 data from a buffer of data.
@@ -775,11 +824,11 @@ function TextSourceBuffer() {
         return isDefault;
     }
 
-    function getParser(mimeType) {
+    function getParser(codecType) {
         var parser;
-        if (mimeType === 'text/vtt') {
+        if (codecType.search('vtt') >= 0) {
             parser = VTTParser;
-        } else if (mimeType === 'application/ttml+xml' || mimeType === 'application/mp4') {
+        } else if (codecType.search('ttml') >= 0 || codecType.search('stpp') >= 0) {
             parser = TTMLParser;
             parser.setConfig({videoModel: videoModel});
         }
